@@ -311,11 +311,21 @@ foreach ($user in $users) {
 Show-Progress -PercentComplete 80 -Status "Calculating presence hours"
 $presenceHours = @{}
 $statuses = @("Available", "Busy", "Away", "BeRightBack", "DoNotDisturb", "Offline")
-$days = @("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Weekly Average")
+$today = Get-Date
+$days = @()
+for ($i = 6; $i -ge 0; $i--) {
+    $day = $today.AddDays(-$i)
+    $days += @{
+        DayOfWeek = $day.DayOfWeek
+        Date = $day.ToString("yyyy-MM-dd")
+    }
+}
+$days += @{ DayOfWeek = "Weekly Average"; Date = "" }
+
 foreach ($user in $userPresenceData) {
     $presenceHours[$user.UserPrincipalName] = @{}
-    foreach ($day in $days[0..4]) {  # Monday to Friday
-        $presenceHours[$user.UserPrincipalName][$day] = @{}
+    foreach ($day in $days[0..6]) {  # Last 7 days
+        $presenceHours[$user.UserPrincipalName][$day.Date] = @{}
         $remainingHours = 24
         foreach ($status in $statuses) {
             if ($status -eq $statuses[-1]) {
@@ -323,14 +333,14 @@ foreach ($user in $userPresenceData) {
             } else {
                 $hours = Get-Random -Minimum 0 -Maximum ($remainingHours + 1)
             }
-            $presenceHours[$user.UserPrincipalName][$day][$status] = $hours
+            $presenceHours[$user.UserPrincipalName][$day.Date][$status] = $hours
             $remainingHours -= $hours
         }
     }
     # Calculate weekly average
     $presenceHours[$user.UserPrincipalName]["Weekly Average"] = @{}
     foreach ($status in $statuses) {
-        $avg = ($days[0..4] | ForEach-Object { $presenceHours[$user.UserPrincipalName][$_][$status] } | Measure-Object -Average).Average
+        $avg = ($days[0..6] | ForEach-Object { $presenceHours[$user.UserPrincipalName][$_.Date][$status] } | Measure-Object -Average).Average
         $presenceHours[$user.UserPrincipalName]["Weekly Average"][$status] = [math]::Round($avg, 1)
     }
 }
@@ -343,7 +353,7 @@ $htmlReport = @"
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horizontal Status Presence Report</title>
+    <title>Last Week Presence Report</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }
         .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
@@ -366,7 +376,7 @@ $htmlReport = @"
 </head>
 <body>
     <div class="container">
-        <h1>Horizontal Status Presence Report</h1>
+        <h1>Last Week Presence Report</h1>
 "@
 
 foreach ($user in $userPresenceData) {
@@ -380,6 +390,7 @@ foreach ($user in $userPresenceData) {
             <table class="presence-table">
                 <tr>
                     <th>Day</th>
+                    <th>Date</th>
                     <th>Available (hours)</th>
                     <th>Busy (hours)</th>
                     <th>Away (hours)</th>
@@ -391,12 +402,14 @@ foreach ($user in $userPresenceData) {
 "@
 
     foreach ($day in $days) {
+        $dayKey = if ($day.DayOfWeek -eq "Weekly Average") { "Weekly Average" } else { $day.Date }
         $htmlReport += @"
                 <tr>
-                    <td>$day</td>
+                    <td>$($day.DayOfWeek)</td>
+                    <td>$($day.Date)</td>
 "@
         foreach ($status in $statuses) {
-            $hours = $presenceHours[$user.UserPrincipalName][$day][$status]
+            $hours = $presenceHours[$user.UserPrincipalName][$dayKey][$status]
             $htmlReport += @"
                     <td>$hours</td>
 "@
@@ -406,10 +419,10 @@ foreach ($user in $userPresenceData) {
                         <div class="status-bar" title="24-hour day distribution">
 "@
         foreach ($status in $statuses) {
-            $hours = $presenceHours[$user.UserPrincipalName][$day][$status]
+            $hours = $presenceHours[$user.UserPrincipalName][$dayKey][$status]
             $width = ($hours / 24) * 100
-            $htmlReport += @"
-                            <div class="status-segment status-$($status)" style="width: $($width)%" title="$($status): $($hours) hours"></div>
+        $htmlReport += @"
+                            <div class="status-segment status-$($status)" style="width: $($width)%;" title="$($status): $($hours) hours"></div>
 "@
         }
         $htmlReport += @"
@@ -436,13 +449,13 @@ Show-Progress -PercentComplete 95 -Status "Saving report"
 Add-Type -AssemblyName System.Windows.Forms
 $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
 $saveFileDialog.Filter = "HTML Files (*.html)|*.html"
-$saveFileDialog.Title = "Save Horizontal Status Presence Report"
+$saveFileDialog.Title = "Save Last Week Presence Report"
 $saveFileDialog.ShowDialog()
 
 if ($saveFileDialog.FileName -ne "") {
     # Save the report
     $htmlReport | Out-File -FilePath $saveFileDialog.FileName -Encoding UTF8
-    Write-Host "Horizontal Status Presence Report saved to: $($saveFileDialog.FileName)"
+    Write-Host "Last Week Presence Report saved to: $($saveFileDialog.FileName)"
 } else {
     Write-Host "Save operation cancelled."
 }
