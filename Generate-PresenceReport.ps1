@@ -6,7 +6,7 @@
        Created by:         Drago Petrovic
        Organization:       MSB365.blog
        Filename:           Generate-PresenceReport.ps1
-       Current version:    V1.0     
+       Current version:    V1.1     
 
        Find us on:
              * Website:         https://www.msb365.blog
@@ -50,6 +50,7 @@
        ===========================================================================
        .CHANGE LOG
              V1.00, 2025/02/17 - DrPe - Initial version
+	     V1.10, 2025/03/14 - DrPe - Bugfix: Error PowerShell Module
 
              
 			 
@@ -256,6 +257,7 @@ write-host ""
 
 
 #----------------------------------------------------------------------------------------
+$MaximumFunctionCount = 10000
 # Install required modules if not already installed
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
     Install-Module -Name Microsoft.Graph -Scope CurrentUser -Force
@@ -264,7 +266,7 @@ if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
 # Import required modules
 Import-Module Microsoft.Graph.Authentication
 Import-Module Microsoft.Graph.Users
-Import-Module Microsoft.Graph.Presence
+Import-Module Microsoft.Graph
 
 # Function to show progress bar
 function Show-Progress {
